@@ -12,6 +12,7 @@ import { telemetryService } from "./services/telemetry/TelemetryService"
 import { WebviewProvider } from "./core/webview"
 import { ErrorService } from "./services/error/ErrorService"
 import { initializeTestMode, cleanupTestMode } from "./services/test/TestMode"
+import { ClineServer } from "./server"
 
 /*
 Built using https://github.com/microsoft/vscode-webview-ui-toolkit
@@ -23,6 +24,7 @@ https://github.com/microsoft/vscode-webview-ui-toolkit-samples/tree/main/framewo
 */
 
 let outputChannel: vscode.OutputChannel
+let server: ClineServer
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -40,6 +42,17 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(...initializeTestMode(context, sidebarWebview))
 
 	vscode.commands.executeCommand("setContext", "cline.isDevMode", IS_DEV && IS_DEV === "true")
+
+	// Start the Cline Web API server
+	server = new ClineServer(outputChannel, sidebarWebview.controller)
+	server.start()
+
+	// Register a disposable to stop the server when the extension is deactivated
+	context.subscriptions.push({
+		dispose: () => {
+			server.stop()
+		},
+	})
 
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(WebviewProvider.sideBarId, sidebarWebview, {
@@ -437,6 +450,11 @@ const { IS_DEV, DEV_WORKSPACE_FOLDER } = process.env
 export function deactivate() {
 	// Clean up test mode
 	cleanupTestMode()
+
+	// Stop the server if it's running
+	if (server) {
+		server.stop()
+	}
 
 	telemetryService.shutdown()
 	Logger.log("Cline extension deactivated")
